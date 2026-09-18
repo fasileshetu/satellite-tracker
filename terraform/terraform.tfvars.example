@@ -1,0 +1,7 @@
+# Copy this to terraform.tfvars and fill in real values.
+# terraform.tfvars itself is gitignored — never commit real secrets.
+
+aws_region   = "us-west-2"
+project_name = "satellite-tracker"
+
+# db_password = "set-a-real-password-here"

@@ -4,7 +4,7 @@ metadata:
   name: api
   namespace: satellite-tracker
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
   selector:
@@ -20,7 +20,7 @@ spec:
           # Replace <ECR_IMAGE_URI> with the full URI printed after your
           # docker push, e.g.
           # 537124951411.dkr.ecr.us-west-2.amazonaws.com/satellite-tracker-api:latest
-          image: <ECR_IMAGE_URI>
+          image: 537124951411.dkr.ecr.us-west-2.amazonaws.com/satellite-tracker-api:latest
           imagePullPolicy: Always # unlike minikube, this actually pulls over the network each time, so "Never" would fail here
           ports:
             - containerPort: 8080
