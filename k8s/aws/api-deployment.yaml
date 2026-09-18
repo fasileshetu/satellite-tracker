@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: satellite-tracker
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          # Replace <ECR_IMAGE_URI> with the full URI printed after your
+          # docker push, e.g.
+          # 537124951411.dkr.ecr.us-west-2.amazonaws.com/satellite-tracker-api:latest
+          image: <ECR_IMAGE_URI>
+          imagePullPolicy: Always # unlike minikube, this actually pulls over the network each time, so "Never" would fail here
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secrets # created via kubectl, holds DATABASE_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
