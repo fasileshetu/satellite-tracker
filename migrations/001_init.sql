@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS components (
+    id           BIGSERIAL PRIMARY KEY,
+    satellite_id TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    part_number  TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'received',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_components_satellite_id ON components (satellite_id);
