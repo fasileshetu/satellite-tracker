@@ -5,7 +5,7 @@ from raw part to flight-ready status. Built as a portfolio project mapped to
 the K2 Space Application Software Engineer qualifications: Go, REST/gRPC,
 PostgreSQL, DynamoDB, Docker, Kubernetes, Terraform, CI/CD, OAuth, AWS.
 
-## Status: Step 1 — REST API + Postgres, containerized
+## Status: Step 2 — running on local Kubernetes
 
 Currently implemented:
 - `GET /health`
@@ -14,30 +14,102 @@ Currently implemented:
 - `GET /components/{id}` — fetch one
 - `PATCH /components/{id}/status` — move it through received → in_test → pass/fail → flight_ready
 
-## Run locally with Docker Compose
+## Run with Docker Compose (simplest)
 
 ```bash
 docker compose up --build
 ```
 
-This starts Postgres (with the schema in `migrations/001_init.sql` applied
-automatically on first boot) and the API on `localhost:8080`.
+Starts Postgres and the API together on `localhost:8080`.
 
-Try it:
+## Run on local Kubernetes (minikube)
+
+This deploys the same containers, but through real Kubernetes objects:
+a Deployment and Service for Postgres, a Deployment and Service for the API,
+plus a ConfigMap, a Secret, and a PersistentVolumeClaim.
+
+### 1. Start minikube
 
 ```bash
-curl -X POST localhost:8080/components \
-  -H "Content-Type: application/json" \
-  -d '{"satellite_id":"K2-GRAVITAS-2","name":"Avionics Board Rev C","part_number":"AV-2201"}'
-
-curl localhost:8080/components
-
-curl -X PATCH localhost:8080/components/1/status \
-  -H "Content-Type: application/json" \
-  -d '{"status":"in_test"}'
+minikube start
 ```
 
-## Run without Docker
+### 2. Build the API image and load it into minikube
+
+minikube runs its own Docker daemon, separate from your normal `docker`
+command, so an image built normally isn't visible to it. `minikube image load`
+copies it in.
+
+```bash
+docker build -t satellite-tracker-api:local .
+minikube image load satellite-tracker-api:local
+```
+
+### 3. Apply the manifests
+
+```bash
+kubectl apply -f k8s/
+```
+
+This creates everything: namespace, secret, configmaps, PVC, both deployments,
+both services.
+
+### 4. Watch it come up
+
+```bash
+kubectl get pods -n satellite-tracker -w
+```
+
+Wait until both `postgres-...` and `api-...` pods show `Running` and `1/1`
+ready. Postgres needs to pass its readiness probe before the API's first
+requests will succeed, though the API pod itself will still start.
+
+### 5. Reach the API
+
+```bash
+minikube service api -n satellite-tracker --url
+```
+
+This prints a URL. Use it the same way as before:
+
+```bash
+curl -X POST $(minikube service api -n satellite-tracker --url)/components \
+  -H "Content-Type: application/json" \
+  -d '{"satellite_id":"K2-GRAVITAS-2","name":"Avionics Board Rev C","part_number":"AV-2201"}'
+```
+
+### 6. Useful commands while you're learning
+
+```bash
+kubectl get all -n satellite-tracker        # see every object at once
+kubectl describe pod <pod-name> -n satellite-tracker   # why is it not starting?
+kubectl logs <pod-name> -n satellite-tracker           # app output
+kubectl logs <pod-name> -n satellite-tracker -f        # follow logs live
+```
+
+### 7. Tear it down
+
+```bash
+kubectl delete namespace satellite-tracker
+```
+
+Deleting the namespace deletes everything inside it in one shot.
+
+## What each manifest does
+
+| File | Kind | Purpose |
+|---|---|---|
+| `00-namespace.yaml` | Namespace | Keeps everything grouped and isolated from other things in the cluster |
+| `01-postgres-configmap.yaml` | ConfigMap | Holds the schema SQL, mounted into Postgres's init directory |
+| `02-postgres-secret.yaml` | Secret | Postgres credentials, kept separate from plain config |
+| `03-postgres-pvc.yaml` | PersistentVolumeClaim | Requests disk storage that survives pod restarts |
+| `04-postgres-deployment.yaml` | Deployment | Runs the Postgres pod, mounts the volume and the init SQL |
+| `05-postgres-service.yaml` | Service (ClusterIP) | Internal-only DNS name so the API can reach Postgres |
+| `06-api-configmap.yaml` | ConfigMap | Non-secret API settings, `PORT` and `DATABASE_URL` |
+| `07-api-deployment.yaml` | Deployment | Runs 2 replicas of the API, with health checks and resource limits |
+| `08-api-service.yaml` | Service (NodePort) | Exposes the API outside the cluster for local testing |
+
+## Run without any of this
 
 Requires Go 1.22+ and a running Postgres instance.
 
@@ -50,7 +122,7 @@ go run ./cmd/api
 ## Roadmap (see project plan)
 
 1. ✅ Go REST API + Postgres, containerized
-2. Deploy to local Kubernetes (minikube/kind): Deployment, Service, ConfigMap
+2. ✅ Local Kubernetes (minikube): Deployment, Service, ConfigMap, Secret, PVC
 3. Terraform for real AWS infra: EKS, RDS
 4. gRPC telemetry ingestion service + DynamoDB
 5. OAuth 2.0 / OIDC login

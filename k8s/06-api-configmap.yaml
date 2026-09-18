@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: satellite-tracker
+data:
+  PORT: "8080"
+  # Points at the Postgres Service by its in-cluster DNS name: <service>.<namespace>.svc.cluster.local
+  # Kubernetes' internal DNS resolves "postgres" to that automatically within the namespace.
+  DATABASE_URL: "postgres://postgres:postgres@postgres:5432/satellite_tracker?sslmode=disable"

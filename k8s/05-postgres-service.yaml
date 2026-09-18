@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: satellite-tracker
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  # No type specified -> defaults to ClusterIP, only reachable from inside
+  # the cluster. Postgres has no business being exposed to the outside world.
