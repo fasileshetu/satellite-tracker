@@ -17,3 +17,12 @@ output "database_url" {
   value       = "postgres://${var.db_username}:${var.db_password}@${aws_db_instance.this.endpoint}/${var.db_name}?sslmode=require"
   sensitive   = true
 }
+
+output "telemetry_table_name" {
+  value = aws_dynamodb_table.telemetry.name
+}
+
+output "grpc_server_role_arn" {
+  description = "Paste this into k8s/aws/grpc-server-deployment.yaml's ServiceAccount annotation (eks.amazonaws.com/role-arn)"
+  value       = aws_iam_role.grpc_server.arn
+}
