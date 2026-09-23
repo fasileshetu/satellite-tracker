@@ -15,5 +15,5 @@ data:
   # frontend would make); the issuer URL is just Cognito's public
   # well-known endpoint. Replace these with the real values from
   # `terraform output cognito_issuer_url` / `cognito_app_client_id`.
-  OIDC_ISSUER_URL: "<COGNITO_ISSUER_URL>"
-  OIDC_CLIENT_ID: "<COGNITO_APP_CLIENT_ID>"
+  OIDC_ISSUER_URL: "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_poNUUDMQP"
+  OIDC_CLIENT_ID: "25jqajngq9n8tk5rq94ksspp42"
