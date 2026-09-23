@@ -177,6 +177,47 @@ setting in `cognito.tf` supports. The CLI shortcut above exercises the
 exact same token-validation code path without needing that frontend
 built first.
 
+## Dashboard (Next.js + TypeScript)
+
+`web/` is a small App Router dashboard that talks to both backends:
+
+- **Components** — lists/filters `GET /components`, registers new ones
+  (`POST /components`), and moves a component through its status lifecycle
+  (`PATCH /components/{id}/status`).
+- **Login** — a real Authorization Code + PKCE flow against Cognito's
+  Hosted UI (`/callback` exchanges the code for tokens via a server-side
+  route, `app/api/auth/token`, so the token endpoint never needs to allow
+  the browser's origin directly). Logged-out visitors can browse; the two
+  write endpoints require a token, same as the API enforces server-side.
+- **Telemetry** — clicking a satellite ID opens `/telemetry/[satelliteId]`,
+  which calls the dashboard's own `/api/telemetry/[satelliteId]` route.
+  That route is a small gRPC client (`@grpc/grpc-js` + `@grpc/proto-loader`,
+  loading `web/proto/telemetry.proto` directly — no generated stubs needed
+  in Node) that calls `grpc-server`'s `GetTelemetryHistory` RPC and returns
+  plain JSON. This exists because browsers can't speak gRPC's HTTP/2
+  framing directly; the dashboard's backend is the bridge, the same
+  backend-for-frontend pattern a real gRPC-web setup would use.
+
+### Running it locally
+
+```bash
+cd web
+npm install
+cp .env.local.example .env.local   # fill in Cognito values if testing login
+npm run dev
+```
+
+Open `http://localhost:3000`. With no Cognito env vars set, the dashboard
+still works for browsing (`GET` routes have no auth) — it just disables
+the login button. Point `NEXT_PUBLIC_API_URL` / `GRPC_SERVER_ADDR` at
+wherever the API and grpc-server are actually running (docker-compose,
+minikube via `kubectl port-forward`, or the real EKS services).
+
+The API now sends CORS headers (`internal/api/cors.go`) so the dashboard
+can call it from a different origin; `ALLOWED_ORIGIN` controls which
+origin is allowed (defaults to `*`, fine for a portfolio project — a real
+deployment would pin it to the dashboard's actual URL).
+
 ## Roadmap (see project plan)
 
 1. ✅ Go REST API + Postgres, containerized
@@ -184,6 +225,6 @@ built first.
 3. ✅ Terraform for real AWS infra: EKS, RDS
 4. ✅ gRPC telemetry ingestion service + DynamoDB (via IRSA)
 5. ✅ OAuth 2.0 / OIDC login (Cognito, resource-server-side validation)
-6. Next.js + TypeScript dashboard
+6. ✅ Next.js + TypeScript dashboard (components CRUD, Cognito login, gRPC-backed telemetry view)
 7. GitHub Actions CI/CD: test → build → push to CodeArtifact → deploy to EKS
 8. Cypress E2E tests
