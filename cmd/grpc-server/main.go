@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -48,7 +49,7 @@ func main() {
 	// provisioned by Terraform (terraform/dynamodb.tf) -- an app process
 	// shouldn't be the thing creating production infrastructure.
 	if endpoint != "" {
-		if err := store.EnsureTable(ctx); err != nil {
+		if err := ensureTableWithRetry(ctx, store); err != nil {
 			log.Fatalf("failed to ensure telemetry table exists: %v", err)
 		}
 		log.Println("DynamoDB Local table ready")
@@ -67,4 +68,23 @@ func main() {
 	if err := grpcSrv.Serve(lis); err != nil {
 		log.Fatalf("grpc server failed: %v", err)
 	}
+}
+
+// ensureTableWithRetry retries EnsureTable with backoff. DynamoDB Local
+// starts as a separate container that docker-compose brings up in
+// parallel -- by the time this process starts, the container exists but
+// the JVM inside it may not have finished booting and bound port 8000
+// yet. depends_on only guarantees container start order, not "ready to
+// accept connections," so the app itself has to tolerate that gap.
+func ensureTableWithRetry(ctx context.Context, store *telemetry.Store) error {
+	const maxAttempts = 10
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err = store.EnsureTable(ctx); err == nil {
+			return nil
+		}
+		log.Printf("DynamoDB not ready yet (attempt %d/%d): %v", attempt, maxAttempts, err)
+		time.Sleep(2 * time.Second)
+	}
+	return err
 }
