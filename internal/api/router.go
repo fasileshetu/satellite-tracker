@@ -13,7 +13,9 @@ import (
 // docker-compose) -- in that case every route is left unprotected,
 // same as before OAuth existed. When it's set, the write endpoints
 // require a valid Cognito access token; reads and /health stay open.
-func NewRouter(s *Server, authVerifier *auth.Verifier) http.Handler {
+// allowedOrigin is passed in from main.go (ALLOWED_ORIGIN env var, defaults
+// to "*") so the dashboard's browser requests aren't blocked by CORS.
+func NewRouter(s *Server, authVerifier *auth.Verifier, allowedOrigin string) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", s.Health)
@@ -29,5 +31,5 @@ func NewRouter(s *Server, authVerifier *auth.Verifier) http.Handler {
 	mux.Handle("POST /components", createComponent)
 	mux.Handle("PATCH /components/{id}/status", updateStatus)
 
-	return mux
+	return withCORS(mux, allowedOrigin)
 }

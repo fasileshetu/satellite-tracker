@@ -45,7 +45,11 @@ func main() {
 		log.Println("OIDC_ISSUER_URL/OIDC_CLIENT_ID not set -- running with no auth (local dev only)")
 	}
 
-	router := api.NewRouter(server, verifier)
+	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "*" // fine for a portfolio project; a real deployment would pin this to the dashboard's real origin
+	}
+	router := api.NewRouter(server, verifier, allowedOrigin)
 
 	port := os.Getenv("PORT")
 	if port == "" {
