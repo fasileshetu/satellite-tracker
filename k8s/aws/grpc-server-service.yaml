@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-server
+  namespace: satellite-tracker
+spec:
+  # ClusterIP, not NodePort like the REST API -- this is meant to be
+  # called by other things running in the cluster (or reached via
+  # `kubectl port-forward` for testing/demoing), not exposed on the
+  # internet. gRPC also needs HTTP/2, which needs extra configuration to
+  # expose properly through an AWS load balancer -- out of scope here,
+  # and not something a real ground-station ingestion service would want
+  # publicly reachable anyway.
+  type: ClusterIP
+  selector:
+    app: grpc-server
+  ports:
+    - port: 9090
+      targetPort: 9090

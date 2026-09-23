@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-server
+  namespace: satellite-tracker
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: grpc-server
+  template:
+    metadata:
+      labels:
+        app: grpc-server
+    spec:
+      serviceAccountName: grpc-server # this is what grants the IRSA AWS credentials -- no static keys anywhere
+      containers:
+        - name: grpc-server
+          # Replace <ECR_IMAGE_URI> with the full URI printed after your
+          # docker push, e.g.
+          # 537124951411.dkr.ecr.us-west-2.amazonaws.com/satellite-tracker-grpc-server:latest
+          image: 537124951411.dkr.ecr.us-west-2.amazonaws.com/satellite-tracker-grpc-server:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9090
+          env:
+            - name: GRPC_PORT
+              value: "9090"
+            - name: AWS_REGION
+              value: "us-west-2"
+            # DYNAMODB_ENDPOINT is deliberately not set here -- an empty
+            # value makes the app fall back to real AWS DynamoDB instead
+            # of DynamoDB Local, using the credentials IRSA injects.
+          readinessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
