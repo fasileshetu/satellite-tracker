@@ -26,3 +26,21 @@ output "grpc_server_role_arn" {
   description = "Paste this into k8s/aws/grpc-server-deployment.yaml's ServiceAccount annotation (eks.amazonaws.com/role-arn)"
   value       = aws_iam_role.grpc_server.arn
 }
+
+output "cognito_user_pool_id" {
+  value = aws_cognito_user_pool.this.id
+}
+
+output "cognito_app_client_id" {
+  value = aws_cognito_user_pool_client.this.id
+}
+
+output "cognito_issuer_url" {
+  description = "The OIDC issuer -- the Go middleware fetches <this>/.well-known/openid-configuration and the JWKS it points to"
+  value       = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.this.id}"
+}
+
+output "cognito_hosted_ui_url" {
+  description = "Cognito's free hosted login page, for testing the real Authorization Code redirect flow"
+  value       = "https://${aws_cognito_user_pool_domain.this.domain}.auth.${var.aws_region}.amazoncognito.com/login?client_id=${aws_cognito_user_pool_client.this.id}&response_type=code&scope=openid+email+profile&redirect_uri=http://localhost:3000/callback"
+}
