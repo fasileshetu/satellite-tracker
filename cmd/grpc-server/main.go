@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
 	"satellite-tracker/internal/grpcserver"
@@ -63,6 +65,13 @@ func main() {
 	grpcSrv := grpc.NewServer()
 	pb.RegisterTelemetryServiceServer(grpcSrv, grpcserver.New(store))
 	reflection.Register(grpcSrv) // lets grpcurl/evans introspect the service without the .proto file
+
+	// Kubernetes' native grpc: readiness/liveness probes (k8s/aws/grpc-server-deployment.yaml)
+	// speak the standard gRPC health-checking protocol, not HTTP -- this
+	// is what they're actually calling.
+	healthSrv := health.NewServer()
+	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(grpcSrv, healthSrv)
 
 	log.Printf("telemetry gRPC server listening on :%s", port)
 	if err := grpcSrv.Serve(lis); err != nil {
