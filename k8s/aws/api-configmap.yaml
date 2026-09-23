@@ -8,3 +8,12 @@ data:
   # DATABASE_URL is deliberately NOT here — it contains the RDS password,
   # so it lives in a Kubernetes Secret instead (created directly with
   # kubectl, never committed to git). See the AWS section of the README.
+  #
+  # OIDC_ISSUER_URL and OIDC_CLIENT_ID are safe to put in a plain
+  # ConfigMap (not a Secret) -- neither is sensitive. A client_id is
+  # meant to be public (it's visible in every browser request a real
+  # frontend would make); the issuer URL is just Cognito's public
+  # well-known endpoint. Replace these with the real values from
+  # `terraform output cognito_issuer_url` / `cognito_app_client_id`.
+  OIDC_ISSUER_URL: "<COGNITO_ISSUER_URL>"
+  OIDC_CLIENT_ID: "<COGNITO_APP_CLIENT_ID>"

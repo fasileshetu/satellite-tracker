@@ -119,13 +119,71 @@ psql "$DATABASE_URL" -f migrations/001_init.sql
 go run ./cmd/api
 ```
 
+## OAuth 2.0 / OIDC (Cognito)
+
+`terraform/cognito.tf` provisions an AWS Cognito User Pool as the OIDC
+identity provider. `internal/auth/middleware.go` is the resource-server
+side: it validates the `Authorization: Bearer <token>` header on
+`POST /components` and `PATCH /components/{id}/status` against Cognito's
+JWKS (its public signing keys), checking the token's signature, issuer,
+expiry, `token_use`, and `client_id`. `GET` endpoints and `/health` stay
+open.
+
+The API only enables this when `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` are
+both set (see `k8s/aws/api-configmap.yaml`) — left unset, e.g. for local
+`docker-compose` dev, it falls back to no auth at all.
+
+### Getting a real token to test with
+
+No frontend exists yet, so the fastest way to get a real Cognito-issued
+access token is the AWS CLI, using `USER_PASSWORD_AUTH` (enabled in
+`cognito.tf` for exactly this purpose):
+
+```bash
+# one-time: create a test user and set a permanent password
+aws cognito-idp admin-create-user \
+  --user-pool-id $(terraform -chdir=terraform output -raw cognito_user_pool_id) \
+  --username test@example.com \
+  --message-action SUPPRESS
+
+aws cognito-idp admin-set-user-password \
+  --user-pool-id $(terraform -chdir=terraform output -raw cognito_user_pool_id) \
+  --username test@example.com \
+  --password 'TempPass123!' \
+  --permanent
+
+# get an access token
+aws cognito-idp initiate-auth \
+  --auth-flow USER_PASSWORD_AUTH \
+  --client-id $(terraform -chdir=terraform output -raw cognito_app_client_id) \
+  --auth-parameters USERNAME=test@example.com,PASSWORD='TempPass123!'
+```
+
+That last command's JSON response has an `AccessToken` field. Use it:
+
+```bash
+curl -X POST localhost:8080/components \
+  -H "Authorization: Bearer <AccessToken value>" \
+  -d '{"satellite_id":"sat-01","name":"Star Tracker","part_number":"ST-100"}'
+
+# without the header, or with a bad/expired token:
+curl -X POST localhost:8080/components -d '{...}'   # -> 401
+```
+
+A real frontend would instead redirect the user to Cognito's Hosted UI
+(`terraform output cognito_hosted_ui_url`) and exchange the returned
+`code` for tokens — the Authorization Code flow the `allowed_oauth_flows`
+setting in `cognito.tf` supports. The CLI shortcut above exercises the
+exact same token-validation code path without needing that frontend
+built first.
+
 ## Roadmap (see project plan)
 
 1. ✅ Go REST API + Postgres, containerized
 2. ✅ Local Kubernetes (minikube): Deployment, Service, ConfigMap, Secret, PVC
-3. Terraform for real AWS infra: EKS, RDS
-4. gRPC telemetry ingestion service + DynamoDB
-5. OAuth 2.0 / OIDC login
+3. ✅ Terraform for real AWS infra: EKS, RDS
+4. ✅ gRPC telemetry ingestion service + DynamoDB (via IRSA)
+5. ✅ OAuth 2.0 / OIDC login (Cognito, resource-server-side validation)
 6. Next.js + TypeScript dashboard
 7. GitHub Actions CI/CD: test → build → push to CodeArtifact → deploy to EKS
 8. Cypress E2E tests
