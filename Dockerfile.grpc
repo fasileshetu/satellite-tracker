@@ -1,0 +1,23 @@
+# Same multi-stage pattern as the main Dockerfile, just building the
+# gRPC telemetry server binary instead of the REST API.
+
+# --- build stage ---
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/grpc-server ./cmd/grpc-server
+
+# --- run stage ---
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /bin/grpc-server /bin/grpc-server
+
+EXPOSE 9090
+ENTRYPOINT ["/bin/grpc-server"]

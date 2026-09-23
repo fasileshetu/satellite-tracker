@@ -27,5 +27,28 @@ services:
       postgres:
         condition: service_healthy
 
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.4
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports:
+      - "8000:8000"
+
+  grpc-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.grpc
+    environment:
+      GRPC_PORT: "9090"
+      AWS_REGION: "us-west-2"
+      DYNAMODB_ENDPOINT: "http://dynamodb-local:8000"
+      # DynamoDB Local ignores credentials but the AWS SDK still requires
+      # something to be set, so these are dummy values, not real secrets.
+      AWS_ACCESS_KEY_ID: "local"
+      AWS_SECRET_ACCESS_KEY: "local"
+    ports:
+      - "9090:9090"
+    depends_on:
+      - dynamodb-local
+
 volumes:
   pgdata:
