@@ -8,7 +8,14 @@ import type { Component, ComponentStatus } from "@/lib/types";
 const STATUSES: ComponentStatus[] = ["received", "in_test", "pass", "fail", "flight_ready"];
 
 export function ComponentsPanel() {
-  const { session } = useAuth();
+  const { session, configured } = useAuth();
+  // Writes are only actually gated when Cognito is configured -- that's
+  // what internal/api/router.go bases its own auth check on (a nil
+  // verifier when OIDC_ISSUER_URL/OIDC_CLIENT_ID are unset, e.g. local
+  // docker-compose). So local dev can still exercise the create/update
+  // flows without a login; accessToken is simply omitted from the request
+  // in that case, matching what the unauthenticated API expects.
+  const canWrite = session || !configured;
   const [components, setComponents] = useState<Component[]>([]);
   const [satelliteFilter, setSatelliteFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,13 +45,13 @@ export function ComponentsPanel() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!session) return;
+    if (!canWrite) return;
     setSubmitting(true);
     setError(null);
     try {
       await createComponent(
         { satellite_id: satelliteId, name, part_number: partNumber },
-        session.accessToken
+        session?.accessToken ?? ""
       );
       setSatelliteId("");
       setName("");
@@ -64,10 +71,10 @@ export function ComponentsPanel() {
   }
 
   async function handleStatusChange(id: number, status: string) {
-    if (!session) return;
+    if (!canWrite) return;
     setError(null);
     try {
-      await updateComponentStatus(id, status, session.accessToken);
+      await updateComponentStatus(id, status, session?.accessToken ?? "");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to update status");
@@ -78,7 +85,7 @@ export function ComponentsPanel() {
     <>
       <div className="panel">
         <h2>Register a component</h2>
-        {!session ? (
+        {!canWrite ? (
           <p className="muted">Log in to register components or update their status.</p>
         ) : (
           <form className="inline" onSubmit={handleCreate}>
@@ -161,7 +168,7 @@ export function ComponentsPanel() {
                   </td>
                   <td className="muted">{new Date(c.updated_at).toLocaleString()}</td>
                   <td>
-                    {session && (
+                    {canWrite && (
                       <select
                         value=""
                         onChange={(e) => {
