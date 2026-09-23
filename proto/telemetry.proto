@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package telemetry;
+
+option go_package = "satellite-tracker/internal/telemetrypb";
+
+import "google/protobuf/timestamp.proto";
+
+// TelemetryService ingests real-time telemetry readings from satellites
+// (temperature, battery voltage, signal strength, etc.) and lets callers
+// query recent history for a given satellite.
+service TelemetryService {
+  // IngestTelemetry is a client-streaming RPC: a satellite (or ground
+  // station relay) opens one long-lived stream and pushes many readings
+  // over it, instead of paying a connection setup cost per reading.
+  // The server acks once, at the end, with a summary.
+  rpc IngestTelemetry(stream TelemetryReading) returns (IngestSummary);
+
+  // GetTelemetryHistory is a plain unary RPC used by the dashboard/API
+  // to pull back recent readings for one satellite.
+  rpc GetTelemetryHistory(TelemetryHistoryRequest) returns (TelemetryHistoryResponse);
+}
+
+message TelemetryReading {
+  string satellite_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double battery_voltage = 3;
+  double temperature_celsius = 4;
+  double signal_strength_dbm = 5;
+  string status = 6; // e.g. "nominal", "warning", "critical"
+}
+
+message IngestSummary {
+  int32 readings_received = 1;
+  string satellite_id = 2;
+}
+
+message TelemetryHistoryRequest {
+  string satellite_id = 1;
+  int32 limit = 2; // max readings to return, most recent first
+}
+
+message TelemetryHistoryResponse {
+  repeated TelemetryReading readings = 1;
+}
