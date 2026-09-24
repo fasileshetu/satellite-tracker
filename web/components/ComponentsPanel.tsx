@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, createComponent, listComponents, updateComponentStatus } from "@/lib/api";
 import type { Component, ComponentStatus } from "@/lib/types";
@@ -26,15 +26,31 @@ export function ComponentsPanel() {
   const [partNumber, setPartNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Every satelliteFilter keystroke fires a new request via the effect below,
+  // but network responses can come back out of order (a slower request for
+  // an earlier, now-stale filter value can resolve after a faster one for
+  // the final value). This counter tags each refresh() call when it starts
+  // and only lets the *last-started* call apply its result, so a stale
+  // response can never overwrite a newer one.
+  const latestRequestId = useRef(0);
+
   async function refresh() {
+    const requestId = ++latestRequestId.current;
     setLoading(true);
     setError(null);
     try {
-      setComponents(await listComponents(satelliteFilter || undefined));
+      const result = await listComponents(satelliteFilter || undefined);
+      if (requestId === latestRequestId.current) {
+        setComponents(result);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "failed to load components");
+      if (requestId === latestRequestId.current) {
+        setError(err instanceof Error ? err.message : "failed to load components");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) {
+        setLoading(false);
+      }
     }
   }
 
