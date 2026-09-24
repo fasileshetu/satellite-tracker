@@ -59,7 +59,10 @@ func (s *Store) ListComponents(ctx context.Context, satelliteID string) ([]model
 	}
 	defer rows.Close()
 
-	var out []models.Component
+	// Initialized to a non-nil empty slice, not left as the zero-value nil
+	// slice -- encoding/json serializes nil as `null`, and the dashboard
+	// (and any other client) expects `[]` for "no components yet".
+	out := []models.Component{}
 	for rows.Next() {
 		var c models.Component
 		if err := rows.Scan(&c.ID, &c.SatelliteID, &c.Name, &c.PartNumber, &c.Status, &c.CreatedAt, &c.UpdatedAt); err != nil {
