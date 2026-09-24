@@ -88,7 +88,7 @@ export function ComponentsPanel() {
         {!canWrite ? (
           <p className="muted">Log in to register components or update their status.</p>
         ) : (
-          <form className="inline" onSubmit={handleCreate}>
+          <form className="inline" onSubmit={handleCreate} data-cy="create-form">
             <label>
               Satellite ID
               <input
@@ -96,6 +96,7 @@ export function ComponentsPanel() {
                 value={satelliteId}
                 onChange={(e) => setSatelliteId(e.target.value)}
                 placeholder="K2-GRAVITAS-2"
+                data-cy="satellite-id-input"
               />
             </label>
             <label>
@@ -105,6 +106,7 @@ export function ComponentsPanel() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Avionics Board Rev C"
+                data-cy="name-input"
               />
             </label>
             <label>
@@ -114,9 +116,10 @@ export function ComponentsPanel() {
                 value={partNumber}
                 onChange={(e) => setPartNumber(e.target.value)}
                 placeholder="AV-2201"
+                data-cy="part-number-input"
               />
             </label>
-            <button type="submit" disabled={submitting}>
+            <button type="submit" disabled={submitting} data-cy="submit-button">
               {submitting ? "Adding..." : "Add component"}
             </button>
           </form>
@@ -133,16 +136,21 @@ export function ComponentsPanel() {
               value={satelliteFilter}
               onChange={(e) => setSatelliteFilter(e.target.value)}
               placeholder="(all satellites)"
+              data-cy="satellite-filter-input"
             />
           </label>
         </form>
 
         {loading ? (
-          <p className="muted">Loading...</p>
+          <p className="muted" data-cy="loading">
+            Loading...
+          </p>
         ) : components.length === 0 ? (
-          <p className="muted">No components yet.</p>
+          <p className="muted" data-cy="empty-state">
+            No components yet.
+          </p>
         ) : (
-          <table>
+          <table data-cy="components-table">
             <thead>
               <tr>
                 <th>Satellite</th>
@@ -155,22 +163,28 @@ export function ComponentsPanel() {
             </thead>
             <tbody>
               {components.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} data-cy="component-row" data-satellite-id={c.satellite_id}>
                   <td>
-                    <a href={`/telemetry/${encodeURIComponent(c.satellite_id)}`}>
+                    <a
+                      href={`/telemetry/${encodeURIComponent(c.satellite_id)}`}
+                      data-cy="telemetry-link"
+                    >
                       {c.satellite_id}
                     </a>
                   </td>
                   <td>{c.name}</td>
                   <td>{c.part_number}</td>
                   <td>
-                    <span className={`badge ${c.status}`}>{c.status}</span>
+                    <span className={`badge ${c.status}`} data-cy="status-badge">
+                      {c.status}
+                    </span>
                   </td>
                   <td className="muted">{new Date(c.updated_at).toLocaleString()}</td>
                   <td>
                     {canWrite && (
                       <select
                         value=""
+                        data-cy="status-select"
                         onChange={(e) => {
                           if (e.target.value) handleStatusChange(c.id, e.target.value);
                         }}

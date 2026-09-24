@@ -218,6 +218,40 @@ can call it from a different origin; `ALLOWED_ORIGIN` controls which
 origin is allowed (defaults to `*`, fine for a portfolio project — a real
 deployment would pin it to the dashboard's actual URL).
 
+## End-to-end tests (Cypress)
+
+`web/cypress/e2e/` has two specs:
+
+- **`components.cy.ts`** — the real workflow against a running dashboard +
+  API: registering a component, filtering the list by satellite ID,
+  moving a component through its status lifecycle (`received` →
+  `in_test` → `pass` → `flight_ready`), and clicking through to a
+  satellite's telemetry page. Each test uses a timestamp-based satellite
+  ID so re-running the suite never collides with data from a previous run.
+  These run against local docker-compose with no Cognito configured —
+  the same unauthenticated local-dev path documented above — since
+  automating a real Cognito Hosted UI redirect isn't practical in CI;
+  the OAuth flow itself has already been verified manually end-to-end
+  against real AWS.
+- **`telemetry.cy.ts`** — isolates the telemetry page's three UI states
+  (empty, populated, backend-unreachable) by intercepting its own
+  `/api/telemetry/[satelliteId]` route, so those assertions are
+  deterministic regardless of whether grpc-server happens to be running.
+
+Run them:
+
+```bash
+cd web
+npm install                       # first time only -- also downloads the Cypress browser binary
+docker compose up --build -d      # from the repo root in another terminal: postgres + api
+npm run cypress:open              # interactive runner, or:
+npm run cypress:run               # headless, CI-style
+```
+
+`npm run e2e` does the same headlessly but also starts/stops the Next.js
+dev server itself (`start-server-and-test`) — handy for CI once the API
+is already up as a service alongside it.
+
 ## Roadmap (see project plan)
 
 1. ✅ Go REST API + Postgres, containerized
@@ -227,4 +261,4 @@ deployment would pin it to the dashboard's actual URL).
 5. ✅ OAuth 2.0 / OIDC login (Cognito, resource-server-side validation)
 6. ✅ Next.js + TypeScript dashboard (components CRUD, Cognito login, gRPC-backed telemetry view)
 7. GitHub Actions CI/CD: test → build → push to CodeArtifact → deploy to EKS
-8. Cypress E2E tests
+8. ✅ Cypress E2E tests

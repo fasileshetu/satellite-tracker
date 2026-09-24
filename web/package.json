@@ -6,19 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "e2e": "start-server-and-test dev http://localhost:3000 cypress:run"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.11.3",
+    "@grpc/proto-loader": "^0.7.13",
     "next": "^15.5.26",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@grpc/grpc-js": "^1.11.3",
-    "@grpc/proto-loader": "^0.7.13"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "typescript": "^5.6.2",
     "@types/node": "^20.16.10",
     "@types/react": "^18.3.10",
-    "@types/react-dom": "^18.3.0"
+    "@types/react-dom": "^18.3.0",
+    "cypress": "^16.1.0",
+    "start-server-and-test": "^3.0.12",
+    "typescript": "^5.6.2"
   }
 }
