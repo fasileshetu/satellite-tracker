@@ -4,3 +4,6 @@ out
 .env.local
 next-env.d.ts
 *.tsbuildinfo
+cypress/videos
+cypress/screenshots
+cypress/downloads
