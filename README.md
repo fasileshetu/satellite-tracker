@@ -260,12 +260,8 @@ jobs:
 1. **`test`** — `go vet`/`go test` for the API and gRPC server, plus
    `tsc --noEmit` and a production `next build` for the dashboard. Needs no
    AWS credentials, so it runs safely on a PR from a fork.
-2. **`build-and-push`** (main only, after `test` passes) — builds the two
-   Go binaries and publishes them to **AWS CodeArtifact** (the JD's
-   "binary management" requirement — a versioned, access-controlled record
-   of exactly what was compiled, independent of how it's later packaged),
-   then builds and pushes the two Docker images to **ECR** (what EKS
-   actually pulls from — CodeArtifact doesn't store container images).
+2. **`build-and-push`** (main only, after `test` passes) — builds and
+   pushes the two Docker images to **ECR** (what EKS actually pulls from).
 3. **`deploy`** (main only, after `build-and-push`) — points `kubectl` at
    the EKS cluster and rolls both deployments to the new image tag.
 
@@ -273,20 +269,30 @@ No AWS access keys live in this repo or its GitHub secrets. The workflow
 authenticates via **OIDC federation**: `terraform/github-oidc.tf`
 provisions a GitHub OIDC identity provider and an IAM role trusted only
 for workflow runs in this exact repo (`repo:fasileshetu/satellite-tracker:*`).
-That role's permissions are scoped to just the two ECR repos, the one
-CodeArtifact repository, and (via an EKS access entry, not the cluster-admin
-one Terraform grants a human running `terraform apply`) edit rights on the
-`satellite-tracker` namespace only — nothing else in the account.
+That role's permissions are scoped to just the two ECR repos and (via an
+EKS access entry, not the cluster-admin one Terraform grants a human
+running `terraform apply`) edit rights on the `satellite-tracker` namespace
+only — nothing else in the account.
 
 Because this project's EKS cluster is deliberately torn down between
 practice sessions to control cost, the `deploy` job is expected to fail
 with a cluster-not-found error whenever nothing is currently deployed —
 that's the infrastructure being absent, not the pipeline being broken.
 
+**Not currently implemented: publishing to a binary artifact repository**
+(the JD's "binary management" line). The original plan built the Go
+binaries and published them to AWS CodeArtifact as a versioned record
+independent of the Docker images. CodeArtifact returned
+`AccessDeniedException: ... needs a subscription for the service` on this
+AWS account — an account-level restriction, not something Terraform or
+the workflow can fix. Revisiting this (either by getting CodeArtifact
+cleared on the account, or swapping in S3 as a private, IAM-gated binary
+store) is a natural next step, but isn't blocking the rest of the pipeline.
+
 ### One-time setup
 
-After `terraform apply` provisions the OIDC provider, IAM role, and
-CodeArtifact repo, set these under the GitHub repo's
+After `terraform apply` provisions the OIDC provider and IAM role, set
+these under the GitHub repo's
 **Settings → Secrets and variables → Actions → Variables** (none of these
 are secret values, so they're repo *variables*, not *secrets*):
 
@@ -295,8 +301,6 @@ are secret values, so they're repo *variables*, not *secrets*):
 | `AWS_ROLE_ARN` | `terraform output github_actions_role_arn` |
 | `AWS_ACCOUNT_ID` | `terraform output aws_account_id` |
 | `EKS_CLUSTER_NAME` | `terraform output eks_cluster_name` |
-| `CODEARTIFACT_DOMAIN` | `terraform output codeartifact_domain` |
-| `CODEARTIFACT_REPOSITORY` | `terraform output codeartifact_repository` |
 
 ## Roadmap (see project plan)
 
@@ -306,5 +310,5 @@ are secret values, so they're repo *variables*, not *secrets*):
 4. ✅ gRPC telemetry ingestion service + DynamoDB (via IRSA)
 5. ✅ OAuth 2.0 / OIDC login (Cognito, resource-server-side validation)
 6. ✅ Next.js + TypeScript dashboard (components CRUD, Cognito login, gRPC-backed telemetry view)
-7. ✅ GitHub Actions CI/CD: test → build → push to CodeArtifact → deploy to EKS
+7. ✅ GitHub Actions CI/CD: test → build → push to ECR → deploy to EKS (binary management via CodeArtifact deferred — see CI/CD section)
 8. ✅ Cypress E2E tests

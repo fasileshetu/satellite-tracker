@@ -45,14 +45,6 @@ output "github_actions_role_arn" {
   value       = aws_iam_role.github_actions.arn
 }
 
-output "codeartifact_domain" {
-  value = aws_codeartifact_domain.this.domain
-}
-
-output "codeartifact_repository" {
-  value = aws_codeartifact_repository.binaries.repository
-}
-
 output "aws_account_id" {
   description = "Paste into the repo's Actions variable AWS_ACCOUNT_ID -- used to build the ECR registry URL in the workflow"
   value       = data.aws_caller_identity.current.account_id

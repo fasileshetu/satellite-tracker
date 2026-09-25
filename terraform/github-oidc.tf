@@ -49,11 +49,10 @@ resource "aws_iam_role" "github_actions" {
 }
 
 # Deliberately scoped to just what the pipeline does -- push images to
-# these two ECR repos, publish binaries to this one CodeArtifact
-# repository, and read enough EKS/STS info to run kubectl. Nothing here
-# grants it the ability to touch other AWS resources, unlike the
-# cluster-admin access_entry in eks.tf that's meant for a human running
-# Terraform by hand.
+# these two ECR repos and read enough EKS/STS info to run kubectl.
+# Nothing here grants it the ability to touch other AWS resources, unlike
+# the cluster-admin access_entry in eks.tf that's meant for a human
+# running Terraform by hand.
 data "aws_iam_policy_document" "github_actions_permissions" {
   statement {
     sid    = "ECRAuth"
@@ -80,28 +79,6 @@ data "aws_iam_policy_document" "github_actions_permissions" {
       "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${var.project_name}-api",
       "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${var.project_name}-grpc-server",
     ]
-  }
-
-  statement {
-    sid    = "CodeArtifactAuth"
-    effect = "Allow"
-    actions = [
-      "codeartifact:GetAuthorizationToken",
-      "sts:GetServiceBearerToken",
-    ]
-    resources = ["*"] # also not resource-scopable
-  }
-
-  statement {
-    sid    = "CodeArtifactPublish"
-    effect = "Allow"
-    actions = [
-      "codeartifact:PublishPackageVersion",
-      "codeartifact:PutPackageMetadata",
-      "codeartifact:ReadFromRepository",
-      "codeartifact:GetRepositoryEndpoint",
-    ]
-    resources = [aws_codeartifact_repository.binaries.arn]
   }
 
   statement {
@@ -139,4 +116,11 @@ resource "aws_eks_access_policy_association" "github_actions" {
     type       = "namespace"
     namespaces = ["satellite-tracker"]
   }
+
+  # Both resources only reference aws_iam_role.github_actions.arn (a plain
+  # string), so Terraform sees no resource-level edge between them and can
+  # try to create this association before the access entry it depends on
+  # actually exists -- exactly what happened on the first apply (404
+  # ResourceNotFoundException). This forces the correct order.
+  depends_on = [aws_eks_access_entry.github_actions]
 }
