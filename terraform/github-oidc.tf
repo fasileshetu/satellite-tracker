@@ -21,7 +21,15 @@ resource "aws_iam_openid_connect_provider" "github" {
 # runs still work without a second role.
 data "aws_iam_policy_document" "github_actions_trust" {
   statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+    # aws-actions/configure-aws-credentials@v4 tags the assumed-role
+    # session with GitHub run context (repo, ref, actor, workflow, ...)
+    # by default, which means the actual API call is
+    # AssumeRoleWithWebIdentity *and* TagSession together. Without
+    # sts:TagSession allowed here too, AWS rejects the whole request as
+    # unauthorized -- which is exactly what happened on the first two
+    # workflow runs, even though AssumeRoleWithWebIdentity alone was
+    # correctly configured.
+    actions = ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
     effect  = "Allow"
 
     principals {
