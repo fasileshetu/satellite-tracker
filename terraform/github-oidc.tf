@@ -43,10 +43,20 @@ data "aws_iam_policy_document" "github_actions_trust" {
       values   = ["sts.amazonaws.com"]
     }
 
+    # GitHub now appends numeric owner/repo IDs to the sub claim on at least
+    # some tokens -- confirmed via CloudTrail (AssumeRoleWithWebIdentity
+    # events showed the real principal as
+    # "repo:fasileshetu@150095070/satellite-tracker@1375197565:ref:refs/heads/main",
+    # not the classic documented "repo:OWNER/REPO:ref:..." format. Both
+    # patterns are listed here since StringLike with multiple values is
+    # OR'd -- whichever format a given token uses, one of these matches it.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:*"]
+      values = [
+        "repo:${var.github_repo}:*",
+        "repo:${split("/", var.github_repo)[0]}@*/${split("/", var.github_repo)[1]}@*:*",
+      ]
     }
   }
 }
