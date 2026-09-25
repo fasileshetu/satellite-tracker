@@ -9,7 +9,7 @@ resource "aws_iam_openid_connect_provider" "github" {
   # GitHub's OIDC token-signing certificate thumbprint. AWS actually
   # verifies the certificate chain itself now and largely ignores this
   # value, but the provider resource still requires one.
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
 # Scopes trust to this one repo -- any workflow run in
