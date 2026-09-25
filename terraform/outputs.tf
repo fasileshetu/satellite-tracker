@@ -40,6 +40,24 @@ output "cognito_issuer_url" {
   value       = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.this.id}"
 }
 
+output "github_actions_role_arn" {
+  description = "Paste into the repo's Actions variable AWS_ROLE_ARN -- lets workflow runs assume this role via OIDC, no access keys needed"
+  value       = aws_iam_role.github_actions.arn
+}
+
+output "codeartifact_domain" {
+  value = aws_codeartifact_domain.this.domain
+}
+
+output "codeartifact_repository" {
+  value = aws_codeartifact_repository.binaries.repository
+}
+
+output "aws_account_id" {
+  description = "Paste into the repo's Actions variable AWS_ACCOUNT_ID -- used to build the ECR registry URL in the workflow"
+  value       = data.aws_caller_identity.current.account_id
+}
+
 output "cognito_hosted_ui_url" {
   description = "Cognito's free hosted login page, for testing the real Authorization Code redirect flow"
   value       = "https://${aws_cognito_user_pool_domain.this.domain}.auth.${var.aws_region}.amazoncognito.com/login?client_id=${aws_cognito_user_pool_client.this.id}&response_type=code&scope=openid+email+profile&redirect_uri=http://localhost:3000/callback"

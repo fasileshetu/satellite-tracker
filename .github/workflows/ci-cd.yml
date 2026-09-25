@@ -1,0 +1,164 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Required for the OIDC token exchange in build-and-push/deploy -- without
+# id-token: write, GitHub won't issue the identity token those jobs
+# exchange for temporary AWS credentials.
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  # Runs on every push and every PR. Nothing here touches AWS, so it needs
+  # no credentials at all -- a fork's PR can run this safely.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go test
+        run: go test ./... -v
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Dashboard type-check + build
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+  # Only runs on main, after test passes -- a PR can prove the code
+  # compiles and its tests pass without ever getting AWS credentials or
+  # touching the real ECR/CodeArtifact repos.
+  build-and-push:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: echo "value=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      # No AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY anywhere in this
+      # workflow -- this exchanges GitHub's own short-lived OIDC token for
+      # temporary AWS credentials scoped to exactly the IAM role Terraform
+      # created (terraform/github-oidc.tf), which in turn can only touch
+      # the two ECR repos, the one CodeArtifact repo, and this namespace
+      # in EKS.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Build Linux binaries
+        run: |
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 go build -o dist/api ./cmd/api
+          GOOS=linux GOARCH=amd64 go build -o dist/grpc-server ./cmd/grpc-server
+
+      # Publishes the raw compiled binaries to CodeArtifact -- the JD's
+      # "binary management" requirement. This is deliberately separate
+      # from the Docker images below: it's a versioned record of exactly
+      # what was built, independent of how it later gets containerized or
+      # deployed.
+      - name: Publish binaries to CodeArtifact
+        run: |
+          for bin in api grpc-server; do
+            aws codeartifact publish-package-version \
+              --domain "${{ vars.CODEARTIFACT_DOMAIN }}" \
+              --repository "${{ vars.CODEARTIFACT_REPOSITORY }}" \
+              --format generic \
+              --namespace satellite-tracker \
+              --package "$bin" \
+              --package-version "${{ steps.tag.outputs.value }}" \
+              --asset-content "dist/$bin" \
+              --asset-name "$bin"
+          done
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/satellite-tracker-api:${{ steps.tag.outputs.value }}
+            ${{ steps.ecr-login.outputs.registry }}/satellite-tracker-api:latest
+
+      - name: Build and push grpc-server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.grpc
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/satellite-tracker-grpc-server:${{ steps.tag.outputs.value }}
+            ${{ steps.ecr-login.outputs.registry }}/satellite-tracker-grpc-server:latest
+
+  # Rolls the new images out to whatever EKS cluster is currently live.
+  # This project's cluster is deliberately torn down between practice
+  # sessions to control cost, so this job is expected to fail with a
+  # cluster-not-found error whenever nothing is deployed right now --
+  # that's the cluster being absent, not the pipeline being broken.
+  deploy:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME }}
+
+      - name: Roll out new images
+        run: |
+          IMAGE_REGISTRY="${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+          TAG="${{ needs.build-and-push.outputs.image-tag }}"
+
+          kubectl set image deployment/api \
+            api="$IMAGE_REGISTRY/satellite-tracker-api:$TAG" \
+            -n satellite-tracker
+
+          kubectl set image deployment/grpc-server \
+            grpc-server="$IMAGE_REGISTRY/satellite-tracker-grpc-server:$TAG" \
+            -n satellite-tracker
+
+          kubectl rollout status deployment/api -n satellite-tracker --timeout=120s
+          kubectl rollout status deployment/grpc-server -n satellite-tracker --timeout=120s

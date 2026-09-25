@@ -43,3 +43,9 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "github_repo" {
+  description = "owner/repo on GitHub, used to scope the OIDC trust policy so only workflow runs in this exact repo can assume the CI/CD IAM role"
+  type        = string
+  default     = "fasileshetu/satellite-tracker"
+}
